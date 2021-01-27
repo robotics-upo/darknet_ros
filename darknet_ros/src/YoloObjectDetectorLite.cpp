@@ -1,11 +1,13 @@
 #include "darknet_ros/YoloObjectDetectorLite.hpp"
 
 extern "C" image ipl_to_image(IplImage* src);
+extern "C" image** load_alphabet_with_file(const char* datafile);
+extern "C" void generate_image(image p, IplImage* disp);
 
 namespace darknet_ros {
 
 YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
-	m_nh(nh), m_imgTransport(nh)
+	m_nh(nh), m_imgTransport(nh), m_classLabelsForDebug(), m_alphabetForDebug()
 {
 	ROS_INFO("[YoloObjectDetectorLite] Node started.");
 
@@ -25,6 +27,18 @@ YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
 	std::string serviceName;
 	m_nh.param("services/camera_reading/name", serviceName, std::string("detect_objects"));
 
+	std::string debugOutputTopicName;
+	m_nh.param("publishers/debug_image_output/topic", debugOutputTopicName, std::string(""));
+
+	if (!debugOutputTopicName.empty()) {
+		m_classLabelsForDebug = new char*[m_classLabels.size()];
+		for (unsigned i = 0; i < m_classLabels.size(); i ++) {
+			m_classLabelsForDebug[i] = const_cast<char*>(m_classLabels[i].c_str());
+		}
+
+		m_alphabetForDebug = load_alphabet_with_file(DARKNET_FILE_PATH "/data");
+	}
+
 	// Path to weights file
 	std::string weightsModel, weightsPath;
 	m_nh.param("yolo_model/weight_file/name", weightsModel, std::string("yolov2-tiny.weights"));
@@ -43,6 +57,9 @@ YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
 
 	// ROS
 	m_imgSubscriber = m_imgTransport.subscribe(cameraTopicName, cameraQueueSize, &YoloObjectDetectorLite::cameraCallback, this);
+	if (!debugOutputTopicName.empty()) {
+		m_publisher = m_nh.advertise<sensor_msgs::Image>(debugOutputTopicName, 1, true);
+	}
 	m_service = m_nh.advertiseService(serviceName, &YoloObjectDetectorLite::serviceCallback, this);
 }
 
@@ -50,6 +67,10 @@ YoloObjectDetectorLite::~YoloObjectDetectorLite()
 {
 	ROS_INFO("[YoloObjectDetectorLite] Node exiting.");
 	free_network(m_net);
+	if (m_alphabetForDebug)
+		free(m_alphabetForDebug);
+	if (m_classLabelsForDebug)
+		delete[] m_classLabelsForDebug;
 }
 
 void YoloObjectDetectorLite::cameraCallback(const sensor_msgs::ImageConstPtr& msg)
@@ -85,12 +106,30 @@ bool YoloObjectDetectorLite::serviceCallback(darknet_ros_msgs::DetectObjects::Re
 	IplImage ipl_image(cv_image->image);
 	image dn_image = ipl_to_image(&ipl_image);
 	image dn_image_letterboxed = letterbox_image(dn_image, m_net->w, m_net->h);
-	free_image(dn_image);
 
 	network_predict(m_net, dn_image_letterboxed.data);
 	int nboxes;
 	detection* dets = get_network_boxes(m_net, dn_image.w, dn_image.h, m_threshold, 0.5f, 0, 1, &nboxes);
 	do_nms_obj(dets, nboxes, m_net->layers[m_net->n - 1].classes, 0.4f);
+
+	if (m_publisher) {
+		draw_detections(dn_image, dets, nboxes, m_threshold, m_classLabelsForDebug, m_alphabetForDebug, m_classLabels.size());
+
+		IplImage* ipl = cvCreateImage(cvSize(dn_image.w, dn_image.h), IPL_DEPTH_8U, dn_image.c);
+		generate_image(dn_image, ipl);
+		cv::Mat cvMat = cv::cvarrToMat(ipl);
+
+		cv_bridge::CvImage cvImage;
+		cvImage.header.stamp = ros::Time::now();
+		cvImage.header.frame_id = "detection_image";
+		cvImage.encoding = sensor_msgs::image_encodings::BGR8;
+		cvImage.image = cvMat;
+		m_publisher.publish(*cvImage.toImageMsg());
+
+		cvReleaseImage(&ipl);
+	}
+
+	free_image(dn_image);
 
 	for (int i = 0; i < nboxes; i ++) {
 		int cat_id = -1;

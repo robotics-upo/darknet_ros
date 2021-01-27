@@ -48,12 +48,16 @@ class YoloObjectDetectorLite {
 	float m_threshold;
 
 	ros::ServiceServer m_service;
+	ros::Publisher m_publisher;
 
 	image_transport::ImageTransport m_imgTransport;
 	image_transport::Subscriber m_imgSubscriber;
 
 	std::mutex m_mutex;
 	cv_bridge::CvImagePtr m_imagePtr;
+
+	char** m_classLabelsForDebug;
+	image** m_alphabetForDebug;
 
 	void cameraCallback(const sensor_msgs::ImageConstPtr& msg);
 	bool serviceCallback(darknet_ros_msgs::DetectObjects::Request& req, darknet_ros_msgs::DetectObjects::Response& res);

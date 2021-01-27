@@ -31,6 +31,9 @@ publishers:
     queue_size: 1
     latch: true
 
+  debug_image_output:
+    topic: /darknet_ros/debug_image
+
 image_view:
 
   enable_opencv: true
