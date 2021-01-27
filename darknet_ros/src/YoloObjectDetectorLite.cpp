@@ -78,7 +78,7 @@ void YoloObjectDetectorLite::cameraCallback(const sensor_msgs::ImageConstPtr& ms
 	cv_bridge::CvImagePtr image;
 
 	try {
-		image = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+		image = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8);
 	} catch (cv_bridge::Exception& e) {
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 		return;
