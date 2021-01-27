@@ -9,6 +9,11 @@ actions:
   camera_reading:
     name: /darknet_ros/check_for_objects
 
+services:
+
+  camera_reading:
+    name: /darknet_ros/detect_objects
+
 publishers:
 
   object_detector:
@@ -31,3 +36,5 @@ image_view:
   enable_opencv: true
   wait_key_delay: 1
   enable_console_output: true
+
+image_transport: compressed

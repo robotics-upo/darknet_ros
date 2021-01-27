@@ -25,6 +25,11 @@ add_action_files(
     CheckForObjects.action
 )
 
+add_service_files(
+  FILES
+    DetectObjects.srv
+)
+
 generate_messages(
   DEPENDENCIES
     actionlib_msgs

@@ -93,6 +93,7 @@ include_directories(
 
 set(PROJECT_LIB_FILES
     src/YoloObjectDetector.cpp                    src/image_interface.c
+    src/YoloObjectDetectorLite.cpp
 )
 
 set(DARKNET_CORE_FILES
@@ -160,6 +161,10 @@ if (CUDA_FOUND)
     src/yolo_object_detector_node.cpp
   )
 
+  cuda_add_executable(${PROJECT_NAME}_lite
+    src/yolo_object_detector_lite_node.cpp
+  )
+
   cuda_add_library(${PROJECT_NAME}_nodelet
     src/yolo_object_detector_nodelet.cpp
   )
@@ -172,6 +177,10 @@ else()
 
   add_executable(${PROJECT_NAME}
     src/yolo_object_detector_node.cpp
+  )
+
+  add_executable(${PROJECT_NAME}_lite
+    src/yolo_object_detector_lite_node.cpp
   )
 
   add_library(${PROJECT_NAME}_nodelet
@@ -191,6 +200,10 @@ target_link_libraries(${PROJECT_NAME}_lib
 )
 
 target_link_libraries(${PROJECT_NAME}
+  ${PROJECT_NAME}_lib
+)
+
+target_link_libraries(${PROJECT_NAME}_lite
   ${PROJECT_NAME}_lib
 )
 
