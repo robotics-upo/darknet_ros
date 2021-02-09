@@ -12,11 +12,16 @@
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <algorithm>
 
 // ROS
 #include <actionlib/server/simple_action_server.h>
 #include <geometry_msgs/Point.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 #include <image_transport/image_transport.h>
+#include <image_transport/subscriber_filter.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -31,6 +36,7 @@
 // darknet_ros_msgs
 #include <darknet_ros_msgs/BoundingBox.h>
 #include <darknet_ros_msgs/DetectObjects.h>
+#include <darknet_ros_msgs/DetectObjects3D.h>
 
 // Darknet
 extern "C" {
@@ -38,6 +44,8 @@ extern "C" {
 }
 
 namespace darknet_ros {
+
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> SyncPolicy;
 
 class YoloObjectDetectorLite {
 
@@ -47,20 +55,29 @@ class YoloObjectDetectorLite {
 	network* m_net;
 	float m_threshold;
 
-	ros::ServiceServer m_service;
+	ros::ServiceServer m_service, m_service3d;
 	ros::Publisher m_publisher;
 
 	image_transport::ImageTransport m_imgTransport;
-	image_transport::Subscriber m_imgSubscriber;
+	image_transport::SubscriberFilter m_imgSubscriber, m_imgSubscriberDepth;
+	message_filters::Synchronizer<SyncPolicy> m_imgSync;
 
 	std::mutex m_mutex;
 	cv_bridge::CvImagePtr m_imagePtr;
+	cv_bridge::CvImagePtr m_imagePtrDepth;
 
 	char** m_classLabelsForDebug;
 	image** m_alphabetForDebug;
 
 	void cameraCallback(const sensor_msgs::ImageConstPtr& msg);
+	void cameraCallback3D(const sensor_msgs::ImageConstPtr& msgColor, const sensor_msgs::ImageConstPtr& msgDepth);
+
+	void calcZData(cv::Mat&& dimg, int64_t& zmin, int64_t& zmax);
+
+	template <typename Lambda>
+	bool serviceCallbackCommon(IplImage& ipl_image, Lambda lambda);
 	bool serviceCallback(darknet_ros_msgs::DetectObjects::Request& req, darknet_ros_msgs::DetectObjects::Response& res);
+	bool serviceCallback3D(darknet_ros_msgs::DetectObjects3D::Request& req, darknet_ros_msgs::DetectObjects3D::Response& res);
 
 public:
 	explicit YoloObjectDetectorLite(ros::NodeHandle nh);

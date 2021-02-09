@@ -4,6 +4,10 @@ subscribers:
     topic: /camera/rgb/image_raw
     queue_size: 1
 
+  camera_depth_reading:
+    topic: /camera/depth_registered/image_raw
+    queue_size: 1
+
 actions:
 
   camera_reading:
@@ -13,6 +17,9 @@ services:
 
   camera_reading:
     name: /darknet_ros/detect_objects
+
+  camera_reading_3d:
+    name: /darknet_ros/detect_objects_3d
 
 publishers:
 

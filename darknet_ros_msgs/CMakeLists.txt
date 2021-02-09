@@ -17,6 +17,8 @@ add_message_files(
   FILES
     BoundingBox.msg
     BoundingBoxes.msg
+    BoundingBox3D.msg
+    BoundingBoxes3D.msg
     ObjectCount.msg
 )
 
@@ -28,6 +30,7 @@ add_action_files(
 add_service_files(
   FILES
     DetectObjects.srv
+    DetectObjects3D.srv
 )
 
 generate_messages(
