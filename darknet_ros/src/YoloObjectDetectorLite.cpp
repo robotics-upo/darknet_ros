@@ -112,7 +112,14 @@ void YoloObjectDetectorLite::cameraCallback3D(const sensor_msgs::ImageConstPtr& 
 
 	try {
 		imageColor = cv_bridge::toCvCopy(msgColor, sensor_msgs::image_encodings::RGB8);
-		imageDepth = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::MONO16);
+		if (msgDepth->encoding != "32FC1") {
+			imageDepth = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::MONO16);
+		} else {
+			imageDepth = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::TYPE_32FC1);
+			cv::Mat newmat;
+			imageDepth->image.convertTo(newmat, CV_16UC1, 1000.0f);
+			imageDepth->image = std::move(newmat);
+		}
 	} catch (cv_bridge::Exception& e) {
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 		return;
