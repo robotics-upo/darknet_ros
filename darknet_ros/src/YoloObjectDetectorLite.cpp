@@ -6,6 +6,14 @@ extern "C" void generate_image(image p, IplImage* disp);
 
 namespace darknet_ros {
 
+namespace {
+	cv::Point2d calc3DProj(image_geometry::PinholeCameraModel const& model, double x, double y, double z)
+	{
+		cv::Point3d p = z * model.projectPixelTo3dRay(cv::Point2d(x, y));
+		return cv::Point2d(p.x, p.y);
+	}
+}
+
 YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
 	m_nh(nh), m_imgTransport(nh), m_imgSync(SyncPolicy(10)), m_classLabelsForDebug(), m_alphabetForDebug()
 {
@@ -17,6 +25,12 @@ YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
 	}
 
 	m_nh.param("yolo_model/threshold/value", m_threshold, 0.3f);
+
+	std::string cameraInfoTopicName;
+	m_nh.param("subscribers/camera_info/topic", cameraInfoTopicName, std::string("/camera/image_raw"));
+
+	int cameraInfoQueueSize;
+	m_nh.param("subscribers/camera_info/queue_size", cameraInfoQueueSize, 1);
 
 	std::string cameraTopicName;
 	m_nh.param("subscribers/camera_reading/topic", cameraTopicName, std::string("/camera/image_raw"));
@@ -68,9 +82,10 @@ YoloObjectDetectorLite::YoloObjectDetectorLite(ros::NodeHandle nh) :
 	m_imgSubscriber.subscribe(m_imgTransport, cameraTopicName, cameraQueueSize,
 		image_transport::TransportHints("compressed", ros::TransportHints(), nh, "RGB_image_transport"));
 	m_imgSubscriberDepth.subscribe(m_imgTransport, cameraDepthTopicName, cameraDepthQueueSize,
-		image_transport::TransportHints("raw", ros::TransportHints(), nh, "D_image_transport"));
-	m_imgSync.connectInput(m_imgSubscriber, m_imgSubscriberDepth);
-	m_imgSync.registerCallback(boost::bind(&YoloObjectDetectorLite::cameraCallback3D, this, _1, _2));
+		image_transport::TransportHints("compressedDepth", ros::TransportHints(), nh, "D_image_transport"));
+	m_infoSubscriber.subscribe(m_nh, cameraInfoTopicName, cameraInfoQueueSize);
+	m_imgSync.connectInput(m_imgSubscriber, m_imgSubscriberDepth, m_infoSubscriber);
+	m_imgSync.registerCallback(boost::bind(&YoloObjectDetectorLite::cameraCallback3D, this, _1, _2, _3));
 	//m_imgSubscriber.registerCallback(&YoloObjectDetectorLite::cameraCallback, this);
 	if (!debugOutputTopicName.empty()) {
 		m_publisher = m_nh.advertise<sensor_msgs::Image>(debugOutputTopicName, 1, true);
@@ -106,7 +121,7 @@ void YoloObjectDetectorLite::cameraCallback(const sensor_msgs::ImageConstPtr& ms
 	}
 }
 
-void YoloObjectDetectorLite::cameraCallback3D(const sensor_msgs::ImageConstPtr& msgColor, const sensor_msgs::ImageConstPtr& msgDepth)
+void YoloObjectDetectorLite::cameraCallback3D(const sensor_msgs::ImageConstPtr& msgColor, const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::CameraInfoConstPtr& msgInfo)
 {
 	cv_bridge::CvImagePtr imageColor, imageDepth;
 
@@ -129,6 +144,7 @@ void YoloObjectDetectorLite::cameraCallback3D(const sensor_msgs::ImageConstPtr& 
 		boost::unique_lock<std::mutex> l(m_mutex);
 		m_imagePtr = std::move(imageColor);
 		m_imagePtrDepth = std::move(imageDepth);
+		m_camModel.fromCameraInfo(msgInfo);
 	}
 }
 
@@ -291,11 +307,15 @@ bool YoloObjectDetectorLite::serviceCallback3D(darknet_ros_msgs::DetectObjects3D
 		bb.Class = label;
 		bb.id = id;
 		bb.probability = prob;
-		bb.xmin = xmin;
-		bb.xmax = xmax;
-		bb.ymin = ymin;
-		bb.ymax = ymax;
 		calcZData(cv_depth->image(cv::Rect(xmin, ymin, xmax-xmin, ymax-ymin)).clone(), bb.zmin, bb.zmax);
+		int64_t avgX = (bb.xmax + bb.xmin) / 2;
+		int64_t avgY = (bb.ymax + bb.ymin) / 2;
+		int64_t avgZ = (bb.zmax + bb.zmin) / 2;
+		bb.xmin = calc3DProj(m_camModel, xmin, avgY, avgZ).x;
+		bb.xmax = calc3DProj(m_camModel, xmax, avgY, avgZ).x;
+		bb.ymin = calc3DProj(m_camModel, avgX, ymin, avgZ).y;
+		bb.ymax = calc3DProj(m_camModel, avgX, ymax, avgZ).y;
+
 		res.bounding_boxes.push_back(bb);
 	});
 }

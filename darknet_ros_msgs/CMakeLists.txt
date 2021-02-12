@@ -11,6 +11,7 @@ find_package(catkin REQUIRED
     sensor_msgs
     std_msgs
     message_generation
+    image_geometry
 )
 
 add_message_files(
@@ -48,4 +49,5 @@ catkin_package(
     sensor_msgs
     message_runtime
     std_msgs
+    image_geometry
 )

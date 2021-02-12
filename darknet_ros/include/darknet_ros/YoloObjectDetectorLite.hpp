@@ -23,9 +23,11 @@
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
 #include <ros/ros.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <std_msgs/Header.h>
+#include <image_geometry/pinhole_camera_model.h>
 
 // OpenCV
 #include <cv_bridge/cv_bridge.h>
@@ -45,7 +47,7 @@ extern "C" {
 
 namespace darknet_ros {
 
-typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> SyncPolicy;
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo> SyncPolicy;
 
 class YoloObjectDetectorLite {
 
@@ -60,17 +62,19 @@ class YoloObjectDetectorLite {
 
 	image_transport::ImageTransport m_imgTransport;
 	image_transport::SubscriberFilter m_imgSubscriber, m_imgSubscriberDepth;
+	message_filters::Subscriber<sensor_msgs::CameraInfo> m_infoSubscriber;
 	message_filters::Synchronizer<SyncPolicy> m_imgSync;
 
 	std::mutex m_mutex;
 	cv_bridge::CvImagePtr m_imagePtr;
 	cv_bridge::CvImagePtr m_imagePtrDepth;
+	image_geometry::PinholeCameraModel m_camModel;
 
 	char** m_classLabelsForDebug;
 	image** m_alphabetForDebug;
 
 	void cameraCallback(const sensor_msgs::ImageConstPtr& msg);
-	void cameraCallback3D(const sensor_msgs::ImageConstPtr& msgColor, const sensor_msgs::ImageConstPtr& msgDepth);
+	void cameraCallback3D(const sensor_msgs::ImageConstPtr& msgColor, const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::CameraInfoConstPtr& msgInfo);
 
 	void calcZData(cv::Mat&& dimg, int64_t& zmin, int64_t& zmax);
 
